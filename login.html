@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cognito Custom Login</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aws-amplify/4.3.15/aws-amplify.min.js"></script>
+    <script src="./custom_login.js" defer></script>
+</head>
+<body>
+    <div>
+        <h2>Login</h2>
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Email or Phone Number" required>
+            <input type="password" id="password" placeholder="Password (if email)" required>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+</body>
+</html>
