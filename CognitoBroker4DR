@@ -1,0 +1,174 @@
+Cognito: Mimic DR using broker service
+
+
+To generate a broker microservice API on AWS that reads parameters from AWS Parameter Store, follow these steps:
+
+Prerequisites
+
+1. AWS Account: Ensure you have an AWS account.
+2. AWS CLI: Install and configure the AWS CLI.
+3. Node.js and npm: Ensure you have Node.js and npm installed.
+4. AWS SDK for JavaScript: Install AWS SDK for interacting with AWS services.
+5. Serverless Framework: Install the Serverless Framework for easier deployment of your Lambda function.
+
+
+
+Step-by-Step Guide
+
+1. Set Up Your Development Environment
+
+    * Install AWS CLI:
+
+curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+sudo installer -pkg AWSCLIV2.pkg -target /
+
+    * Configure AWS CLI:
+    * aws configure
+
+
+
+* Install Node.js and npm: Download from Node.js website and install.
+* Install Serverless Framework:
+
+npm install -g serverless
+
+1. Create a Serverless Project
+
+    * Create a new Serverless service
+
+serverless create —template aws-nodejs —path broker-microservice
+cd broker-microservice
+
+
+
+1. Install Required Packages
+
+    * Install AWS SDK and Axios for HTTP requests:
+
+npm install aws-sdk axios
+
+1. Create the Lambda Function
+
+    * Update the handler.js file to include the logic for reading parameters from AWS Parameter Store and making the OAuth call to Amazon Cognito:
+
+const AWS = require('aws-sdk');
+const axios = require('axios');
+
+const ssm = new AWS.SSM();
+
+const getParameter = async (name) => {
+  const params = {
+    Name: name,
+    WithDecryption: true
+  };
+  const parameter = await ssm.getParameter(params).promise();
+  return parameter.Parameter.Value;
+};
+
+module.exports.brokerHandler = async (event) => {
+  try {
+    // Read parameters from Parameter Store
+    const cognitoClientId = await getParameter('/broker/cognitoClientId');
+    const cognitoDomainUrl = await getParameter('/broker/cognitoDomainUrl');
+    const cognitoAppClientId = await getParameter('/broker/cognitoAppClientId');
+    
+    // Make OAuth call to get access token
+    const tokenUrl = `${cognitoDomainUrl}/oauth2/token`;
+    const auth = Buffer.from(`${cognitoClientId}:${cognitoAppClientId}`).toString('base64');
+
+    const response = await axios.post(tokenUrl, new URLSearchParams({
+      grant_type: 'client_credentials'
+    }), {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    const accessToken = response.data.access_token;
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        accessToken: accessToken
+      }),
+    };
+
+  } catch (error) {
+    console.error(error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: 'Internal Server Error'
+      }),
+    };
+  }
+};
+
+
+
+
+1. Configure Serverless
+
+    * Update the serverless.yml file to define the Lambda function and permissions:
+
+service: broker-microservice
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  region: us-east-1
+
+functions:
+  brokerHandler:
+    handler: handler.brokerHandler
+    events:
+      - http:
+          path: broker
+          method: get
+    environment:
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+
+iamRoleStatements:
+  - Effect: "Allow"
+    Action:
+      - "ssm:GetParameter"
+    Resource: "arn:aws:ssm:us-east-1:YOUR_ACCOUNT_ID:parameter/broker/*"
+
+
+
+
+1. Deploy the Service
+
+    * Deploy the service using Serverless Framework:
+
+serverless deploy
+
+
+
+1.  Store Parameters in AWS Parameter Store
+
+    * Add the necessary parameters to AWS Parameter Store:
+
+aws ssm put-parameter —name /broker/cognitoClientId —value YOUR_COGNITO_CLIENT_ID —type SecureString
+aws ssm put-parameter —name /broker/cognitoDomainUrl —value YOUR_COGNITO_DOMAIN_URL —type SecureString
+aws ssm put-parameter —name /broker/cognitoAppClientId —value YOUR_COGNITO_APP_CLIENT_ID —type SecureString
+
+
+
+Testing
+
+You can test your broker microservice by sending a GET request to the deployed API endpoint:
+
+curl https://YOUR_API_ENDPOINT/broker
+
+
+
+This request should return an access token from Amazon Cognito.
+
+Notes
+
+* Ensure you replace placeholders like YOUR_ACCOUNT_ID, YOUR_COGNITO_CLIENT_ID, YOUR_COGNITO_DOMAIN_URL, and YOUR_COGNITO_APP_CLIENT_ID with actual values.
+* Ensure that the parameters stored in AWS Parameter Store have the correct names and values.
+
+This setup provides a secure way to manage your credentials using AWS Parameter Store and allows your microservice to fetch an access token from Amazon Cognito dynamically.
